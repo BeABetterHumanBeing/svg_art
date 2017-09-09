@@ -63,8 +63,9 @@ class XmlNode(XmlBase):
 		super(XmlNode, self).__init__(tag)
 		self.children = []
 
-	def child(self, child):
-		self.children.append(child)
+	def child(self, *children):
+		for child in children:
+			self.children.append(child)
 		# Return self so that these commands can be chained.
 		return self
 	
@@ -115,13 +116,52 @@ class Path(XmlLeaf):
 
 # These fragments are used to generate paths.
 def move(x, y):
-	return "M %d %d" % (x, y)
+	return "M {} {}".format(x, y)
 
 def line(x, y):
-	return "l %d %d" % (x, y)
+	return "L {} {}".format(x, y)
 
-def bezier(x1, y1, x2, y2):
-	return "q %d %d %d %d" % (x1, y1, x2, y2)
+def delta_line(dx, dy):
+	return "l {} {}".format(dx, dy)
+
+def horizontal(x):
+	return "H {}".format(x)
+
+def delta_horizontal(dx):
+	return "h {}".format(dx)
+
+def vertical(y):
+	return "V {}".format(y)
+
+def delta_vertical(dy):
+	return "v {}".format(dy)
+
+def cubic_bezier(x1, y1, x2, y2, x, y):
+	return "C {} {}, {} {}, {} {}".format(x1, y1, x2, y2, x, y)
+
+def delta_cubic_bezier(dx1, dy1, dx2, dy2, dx, dy):
+	return "c {} {}, {} {}, {} {}".format(dx1, dy1, dx2, dy2, dx, dy)
+
+def smooth_cubic_bezier(x2, y2, x, y):
+	return "S {} {}, {} {}".format(x2, y2, x, y)
+
+def delta_smooth_cubic_bezier(dx2, dy2, dx, dy):
+	return "s {} {}, {} {}".format(dx2, dy2, dx, dy)
+
+def quadratic_bezier(x1, y1, x2, y2):
+	return "Q {} {}, {} {}".format(x1, y1, x2, y2)
+
+def delta_quadratic_bezier(dx1, dy1, dx2, dy2):
+	return "q {} {}, {} {}".format(dx1, dy1, dx2, dy2)
+
+def smooth_quadratic_bezier(x, y):
+	return "T {} {}".format(x, y)
+
+def delta_smooth_quadratic_bezier(dx, dy):
+	return "t {} {}".format(dx, dy)
+
+def close():
+	return "Z"
 
 class Text(XmlNode):
 
@@ -130,14 +170,14 @@ class Text(XmlNode):
 		self.text = text
 
 	def render(self, prefix):
-		# Small modification of the XmlNode render function.
+		# Small modification of the XmlNode render function, which adds
+		# rendering the element's text.
 		result = super(XmlNode, self).render(prefix, False) + "\n"
 		result += prefix + "  " + self.text + "\n"
+		for child in self.children:
+			result += child.render(prefix + "  ")
 		result += prefix + "</%s>\n" % self.tag
 		return result
-
-	def child(self, child):
-		assert False, "<text></text> cannot have children"
 
 	def isValidParam(self, key):
 		return key in ["x", "y", "dx"]
@@ -147,13 +187,13 @@ class Text(XmlNode):
 		self.param("y", "{}".format(y))
 		return self
 
-class Circle(XmlLeaf):
+class Circle(XmlNode):
 
 	def __init__(self):
 		super(Circle, self).__init__("circle")
 
 	def isValidParam(self, key):
-		return key in ["id", "cx", "cy", "r"]
+		return key in ["id", "cx", "cy", "r", "stroke", "stroke-width", "fill"]
 
 	def center(self, cx, cy):
 		self.param("cx", "{}".format(cx))
@@ -172,7 +212,64 @@ class G(XmlNode):
 		return key in ["font-size", "font-family", "fill", "stroke",
 			"text-anchor", "stroke-width"]
 
-# TEST SVG from W3Schools
+class AnimateMotion(XmlNode):
+
+	def __init__(self):
+		super(AnimateMotion, self).__init__("animateMotion")
+
+	def path(self, *args):
+		d = " ".join(args)
+		return self.param("path", d)
+
+	def isValidParam(self, key):
+		return key in ["path", "begin", "dur", "fill", "repeatCount"]
+
+class MPath(XmlLeaf):
+
+	def __init__(self):
+		super(MPath, self).__init__("mpath")
+
+	def isValidParam(self, key):
+		return key in ["xlink:href"]
+
+	def link(self, id):
+		self.param("xlink:href", "#{}".format(id))
+		return self
+
+# The Eye that the eye are all has in common.
+eye = G().child(
+	Circle()
+		.id("pupil")
+		.param("stroke", "red")
+		.param("stroke-width", 8)
+		.param("fill", "black")
+		.center(200, 200)
+		.radius(17).child(
+		AnimateMotion()
+			.param("dur", "6s")
+			.param("repeatCount", "indefinite").child(
+			MPath()
+				.link("wanderingEye"))),
+	Path()
+		.id("wanderingEye")
+		.path(
+			move(-20, 10),
+			delta_line(40, -10),
+			delta_line(-20, -8),
+			delta_line(5, 19),
+			close()),
+	Path()
+		.param("stroke", "black")
+		.param("stroke-width", 4)
+		.param("fill", "none")
+		.path(
+			move(160, 220),
+			quadratic_bezier(160, 185, 200, 180),
+			smooth_quadratic_bezier(255, 195),
+			quadratic_bezier(195, 245, 160, 220),
+			close()))
+
+# TEST SVG
 output = \
 	Html().child(
 	Body().child(
@@ -181,21 +278,21 @@ output = \
 			.id("lineAB")
 			.param("stroke", "red")
 			.param("stroke-width", "3")
-			.path(move(100, 350), line(150, -300))).child(
+			.path(move(100, 350), delta_line(150, -300)),
 		Path()
 			.id("lineBC")
 			.param("stroke", "red")
 			.param("stroke-width", "3")
-			.path(move(250, 50), line(150, 300))).child(
+			.path(move(250, 50), delta_line(150, 300)),
 		Path()
 			.param("stroke", "green")
 			.param("stroke-width", "3")
-			.path(move(175, 200), line(150, 0))).child(
+			.path(move(175, 200), delta_line(150, 0)),
 		Path()
 			.param("stroke", "blue")
 			.param("stroke-width", "5")
 			.param("fill", "none")
-			.path(move(100, 350), bezier(150, -300, 300, 0))).child(
+			.path(move(100, 350), delta_quadratic_bezier(150, -300, 300, 0)),
 		G()
 			.param("stroke", "black")
 			.param("stroke-width", "3")
@@ -203,15 +300,15 @@ output = \
 			Circle()
 				.param("id", "pointA")
 				.center(100, 350)
-				.radius(3)).child(
+				.radius(3),
 			Circle()
 				.param("id", "pointB")
 				.center(250, 50)
-				.radius(3)).child(
+				.radius(3),
 			Circle()
 				.param("id", "pointC")
 				.center(400, 350)
-				.radius(3))).child(
+				.radius(3)),
 		G()
 			.param("font-size", "30")
 			.param("font-family", "sans-serif")
@@ -220,13 +317,14 @@ output = \
 			.param("text-anchor", "middle").child(
 			Text("A")
 				.corner(100, 350)
-				.param("dx", "-30")).child(
+				.param("dx", "-30"),
 			Text("B")
 				.corner(250, 50)
-				.param("dx", "-10")).child(
+				.param("dx", "-10"),
 			Text("C")
 				.corner(400, 350)
-				.param("dx", "30")))))
+				.param("dx", "30")),
+		eye)))
 result = output.render()
 
 print "Result:"
