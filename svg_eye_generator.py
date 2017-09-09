@@ -12,6 +12,8 @@ class XmlBase(object):
 		self.params = {}
 
 	def param(self, key, value):
+		assert self.isValidParam(key), "{} is not a valid param in class {}" \
+			.format(key, type(self).__name__)
 		self.params[key] = value
 		# Return self so that these commands can be chained.
 		return self
@@ -43,6 +45,12 @@ class XmlBase(object):
 		lines.append(line)
 		result = "\n".join([line for line in lines])
 		return result
+
+	def isValidParam(self, key):
+		return False
+
+	def id(self, id):
+		return self.param("id", id)
 
 class XmlLeaf(XmlBase):
 
@@ -85,6 +93,14 @@ class Svg(XmlNode):
 	def __init__(self):
 		super(Svg, self).__init__("svg")
 
+	def size(self, width, height):
+		self.param("width", "{}".format(width))
+		self.param("height", "{}".format(height))
+		return self
+
+	def isValidParam(self, key):
+		return key in ["width", "height"]
+
 class Path(XmlLeaf):
 
 	def __init__(self):
@@ -93,6 +109,9 @@ class Path(XmlLeaf):
 	def path(self, *args):
 		d = " ".join(args)
 		return self.param("d", d)
+
+	def isValidParam(self, key):
+		return key in ["id", "stroke", "stroke-width", "d", "fill"]
 
 # These fragments are used to generate paths.
 def move(x, y):
@@ -120,15 +139,38 @@ class Text(XmlNode):
 	def child(self, child):
 		assert False, "<text></text> cannot have children"
 
+	def isValidParam(self, key):
+		return key in ["x", "y", "dx"]
+
+	def corner(self, x, y):
+		self.param("x", "{}".format(x))
+		self.param("y", "{}".format(y))
+		return self
+
 class Circle(XmlLeaf):
 
 	def __init__(self):
 		super(Circle, self).__init__("circle")
 
+	def isValidParam(self, key):
+		return key in ["id", "cx", "cy", "r"]
+
+	def center(self, cx, cy):
+		self.param("cx", "{}".format(cx))
+		self.param("cy", "{}".format(cy))
+		return self
+
+	def radius(self, r):
+		return self.param("r", "{}".format(r))
+
 class G(XmlNode):
 
 	def __init__(self):
 		super(G, self).__init__("g")
+
+	def isValidParam(self, key):
+		return key in ["font-size", "font-family", "fill", "stroke",
+			"text-anchor", "stroke-width"]
 
 # TEST SVG from W3Schools
 output = \
@@ -136,12 +178,12 @@ output = \
 	Body().child(
 	Svg().param("width", 1000).param("height", 1000).child(
 		Path()
-			.param("id", "lineAB")
+			.id("lineAB")
 			.param("stroke", "red")
 			.param("stroke-width", "3")
 			.path(move(100, 350), line(150, -300))).child(
 		Path()
-			.param("id", "lineBC")
+			.id("lineBC")
 			.param("stroke", "red")
 			.param("stroke-width", "3")
 			.path(move(250, 50), line(150, 300))).child(
@@ -160,19 +202,16 @@ output = \
 			.param("fill", "black").child(
 			Circle()
 				.param("id", "pointA")
-				.param("cx", "100")
-				.param("cy", "350")
-				.param("r", "3")).child(
+				.center(100, 350)
+				.radius(3)).child(
 			Circle()
 				.param("id", "pointB")
-				.param("cx", "250")
-				.param("cy", "50")
-				.param("r", "3")).child(
+				.center(250, 50)
+				.radius(3)).child(
 			Circle()
 				.param("id", "pointC")
-				.param("cx", "400")
-				.param("cy", "350")
-				.param("r", "3"))).child(
+				.center(400, 350)
+				.radius(3))).child(
 		G()
 			.param("font-size", "30")
 			.param("font-family", "sans-serif")
@@ -180,16 +219,13 @@ output = \
 			.param("stroke", "none")
 			.param("text-anchor", "middle").child(
 			Text("A")
-				.param("x", "100")
-				.param("y", "350")
+				.corner(100, 350)
 				.param("dx", "-30")).child(
 			Text("B")
-				.param("x", "250")
-				.param("y", "50")
+				.corner(250, 50)
 				.param("dx", "-10")).child(
 			Text("C")
-				.param("x", "400")
-				.param("y", "350")
+				.corner(400, 350)
 				.param("dx", "30")))))
 result = output.render()
 
